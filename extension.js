@@ -88,15 +88,17 @@ function activate(context) {
       const runProcess = cp.spawn(ofAppExecutable, [], { detached: true, stdio: 'ignore' });
       runProcess.unref(); // let it run independently
 
-      // Connect to TCP servers once the app starts
-      connectToImageServer(panel);
-      connectToMessageServer();
+      // Connect to TCP servers once the app starts (with delay to let app initialize)
+      setTimeout(() => {
+        connectToImageServer(panel);
+        connectToMessageServer();
+      }, 2000); // Wait 2 seconds for the app to fully start
     });
   });
 
   // Function to connect to image server and stream frames
   function connectToImageServer(panel) {
-    // Opens a TCP connection to your C++ app’s image server on localhost port 12000:
+    // Opens a TCP connection to your C++ app's image server on localhost port 12000:
     const imageClient = new net.Socket();
     let retries = 0;
     const maxRetries = 20;
@@ -111,9 +113,24 @@ function activate(context) {
       let chunks = [];
       imageClient.on('data', (data) => {
         chunks.push(data);
-        const base64 = Buffer.concat(chunks).toString('base64');
-        panel.webview.postMessage({ type: 'frame', data: base64 });
-        chunks = [];
+        
+        // Check if we have a complete PNG by looking for PNG end marker
+        const combined = Buffer.concat(chunks);
+        const pngEnd = Buffer.from([0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82]); // PNG IEND chunk
+        
+        if (combined.includes(pngEnd)) {
+          // Find the end of the PNG
+          const endIndex = combined.indexOf(pngEnd) + pngEnd.length;
+          const completeFrame = combined.slice(0, endIndex);
+          
+          // Send complete frame to webview
+          const base64 = completeFrame.toString('base64');
+          panel.webview.postMessage({ type: 'frame', data: base64 });
+          
+          // Keep any remaining data for next frame
+          const remaining = combined.slice(endIndex);
+          chunks = remaining.length > 0 ? [remaining] : [];
+        }
       });
     });
 
@@ -221,7 +238,7 @@ function getWebviewContent() {
           <div id="bar"></div>
         </div>
       </div>
-      <img id="frame"">
+      <img id="frame" style="display:none; width:100%; height:auto; min-width:400px; min-height:300px; max-width:800px; object-fit:contain;">
       <script>
         const vscode = acquireVsCodeApi();
         window.addEventListener('message', event => {
