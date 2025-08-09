@@ -4,15 +4,15 @@
   "description": "tamo game",
   "version": "0.0.1",
   "engines": {
-    "vscode": "^1.103.0"
+    "vscode": "^1.102.0"
   },
   "categories": [
     "Other"
   ],
- "activationEvents": [
-    "onCommand:tamo.showView",
-    "onCommand:tamo.sendMessage"
-  ],
+"activationEvents": [
+  "onCommand:tamo.showView",
+  "onCommand:tamo.sendMessage"
+],
   "main": "./extension.js",
   "contributes": {
     "commands": [{

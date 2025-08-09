@@ -1,0 +1,28 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build-oF-app",
+      "type": "shell",
+      "command": "make Release",
+      "options": {
+        "cwd": "${workspaceFolder}/../ofxCodePlugin_CC2"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "run-oF-app",
+      "type": "shell",
+      "command": "./ofxCodePlugin_CC2",
+      "options": {
+        "cwd": "${workspaceFolder}/../ofxCodePlugin_CC2/bin/ofxCodePlugin_CC2.app/Contents/MacOS"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "build-and-run-oF",
+      "dependsOn": ["build-oF-app", "run-oF-app"],
+      "dependsOrder": "sequence"
+    }
+  ]
+}
