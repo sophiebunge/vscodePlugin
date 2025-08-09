@@ -55,6 +55,15 @@ function activate(context) {
 
     vscode.window.showInformationMessage('Building openFrameworks app...');
 
+    // Send fake progress updates to webview
+    let progress = 0;
+    const progressInterval = setInterval(() => {
+      if (panel) {
+        panel.webview.postMessage({ type: 'progress', value: progress });
+      }
+      if (progress < 90) progress += 2; // increment until 90%
+    }, 200);
+
     // Use spawn instead of exec so it doesn't block
     const buildProcess = cp.spawn('make', ['Release'], { cwd: ofAppPath });
 
@@ -62,6 +71,7 @@ function activate(context) {
     buildProcess.stderr.on('data', data => console.error(data.toString()));
 
     buildProcess.on('close', code => {
+      clearInterval(progressInterval);
       isBuilding = false;
       if (code !== 0) {
         vscode.window.showErrorMessage('Build failed! See console for details.');
@@ -70,6 +80,9 @@ function activate(context) {
       vscode.window.showInformationMessage('Build succeeded, launching app...');
       
       hasBuilt = true;
+
+      // Set progress to 100% before starting app
+      if (panel) panel.webview.postMessage({ type: 'progress', value: 100 });
 
       // Launch the oF app without blocking the extension
       const runProcess = cp.spawn(ofAppExecutable, [], { detached: true, stdio: 'ignore' });
@@ -165,20 +178,60 @@ function activate(context) {
   context.subscriptions.push(showViewCmd, sendMessageCmd);
 }
 
-// Basic HTML with a black background. Contains an <img> element that will show 
-// the latest image frame. Listens for message events from the extension’s 
-// backend. When it receives a frame message, it updates the <img> source with 
-// the base64 PNG data:
+// Basic HTML with loading screen and progress bar, replaced by live stream when ready:
 function getWebviewContent() {
   return `
     <!DOCTYPE html>
     <html>
-    <body style="background:black; margin:0;">
-      <img id="frame" style="width:100%; height:auto;">
+    <head>
+      <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+      <style>
+        body {
+          background: black;
+          margin: 0;
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-direction: column;
+          height: 100vh;
+          font-family: 'Press Start 2P', monospace;
+          /* Disable font smoothing for pixelated look */
+          -webkit-font-smoothing: none;
+          -moz-osx-font-smoothing: grayscale;
+          image-rendering: pixelated;
+          text-rendering: optimizeSpeed;
+          letter-spacing: 1px;
+          font-size: 12px; /* Adjust size as needed */
+        }
+        #loading {
+          text-align: center;
+        }
+        #bar {
+          height: 100%;
+          width: 0%;
+          background: white;
+        }
+      </style>
+    </head>
+    <body>
+      <div id="loading">
+        <div>Loading... <span id="percent">0</span>%</div>
+        <div style="width:300px; height:20px; border:1px solid white; margin-top:10px;">
+          <div id="bar"></div>
+        </div>
+      </div>
+      <img id="frame"">
       <script>
         const vscode = acquireVsCodeApi();
         window.addEventListener('message', event => {
+          if (event.data.type === 'progress') {
+            document.getElementById('percent').textContent = event.data.value;
+            document.getElementById('bar').style.width = event.data.value + '%';
+          }
           if (event.data.type === 'frame') {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('frame').style.display = 'block';
             document.getElementById('frame').src = 'data:image/png;base64,' + event.data.data;
           }
         });
