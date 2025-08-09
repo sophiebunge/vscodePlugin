@@ -1,0 +1,41 @@
+{
+  "name": "tamo",
+  "displayName": "tamo",
+  "description": "tamo game",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.103.0"
+  },
+  "categories": [
+    "Other"
+  ],
+ "activationEvents": [
+    "onCommand:tamo.showView",
+    "onCommand:tamo.sendMessage"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [{
+      "command": "tamo.showView",
+      "title": "Tamagotchi Live View"
+    },   {
+        "command": "tamo.sendMessage",
+        "title": "Send Message to Tamagotchi"
+      }]
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "pretest": "npm run lint",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.103.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "eslint": "^9.32.0",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^2.5.2"
+  }
+
+
+}
