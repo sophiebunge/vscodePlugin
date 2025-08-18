@@ -17,11 +17,46 @@
   "contributes": {
     "commands": [{
       "command": "tamo.showView",
-      "title": "Tamagotchi Live View"
+      "title": "Tamagotchi Live View",
+      "icon": "$(play)"
     },   {
         "command": "tamo.sendMessage",
-        "title": "Send Message to Tamagotchi"
-      }]
+        "title": "Send Message to Tamagotchi",
+        "icon": "$(comment)"
+      }],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "tamagotchi",
+          "title": "Tamagotchi",
+          "icon": "$(heart)"
+        }
+      ]
+    },
+    "views": {
+      "tamagotchi": [
+        {
+          "type": "webview",
+          "id": "tamagotchi.liveView",
+          "name": "Live View",
+          "when": "true"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "tamo.showView",
+          "when": "view == tamagotchi.liveView",
+          "group": "navigation"
+        },
+        {
+          "command": "tamo.sendMessage",
+          "when": "view == tamagotchi.liveView",
+          "group": "navigation"
+        }
+      ]
+    }
   },
   "scripts": {
     "lint": "eslint .",

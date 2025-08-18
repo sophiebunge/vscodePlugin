@@ -21,10 +21,36 @@ function activate(context) {
   // Flags to prevent rebuilding multiple times and to track if app is built
   let isBuilding = false;
   let hasBuilt = false;
+
+  let typingTimer; // Status of user typing
+  let isCurrentlyTyping = false; // Track if user is currently typing
+  const IDLE_TIMEOUT = 3 * 60 * 1000; // 3 minutes timeout
+
+  // Create the webview view provider for the sidebar
+  const provider = {
+    resolveWebviewView(webviewView, context, _token) {
+      webviewView.webview.options = {
+        enableScripts: true,
+        localResourceRoots: []
+      };
+
+      webviewView.webview.html = getWebviewContent();
+      
+      // Store reference to webview for later use
+      provider._view = webviewView;
+      
+      return webviewView;
+    }
+  };
+
+  // Register the webview view provider
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider('tamagotchi.liveView', provider)
+  );
    
   // The below code registers a new command (tamo.showView) that the user can run 
-  //(via command palette, keyboard shortcut, button, etc.). When run, it creates 
-  // a Webview panel and sets up TCP connections:
+  //(via command palette, keyboard shortcut, button, etc.). When run, it builds
+  // and starts the openFrameworks app and connects to it:
   let showViewCmd = vscode.commands.registerCommand('tamo.showView', () => {
 
     if (isBuilding) {
@@ -32,34 +58,45 @@ function activate(context) {
       return;
     }
 
-    // If already built and panel exists, just reveal it
-    if (hasBuilt && panel) {
-      panel.reveal();
+    // If already built, just show a message
+    if (hasBuilt) {
+      vscode.window.showInformationMessage('Tamagotchi app is already running! Check the sidebar.');
+      return;
+    }
+
+    // Get the current webview (should exist in sidebar)
+    const currentWebview = provider._view;
+    if (!currentWebview) {
+      // Try to focus the sidebar view to trigger its creation
+      vscode.commands.executeCommand('tamagotchi.liveView.focus');
+      
+      // Wait a moment for the view to be created, then try again
+      setTimeout(() => {
+        if (provider._view) {
+          // Restart the command now that the view exists
+          vscode.commands.executeCommand('tamo.showView');
+        } else {
+          vscode.window.showErrorMessage('Please open the Tamagotchi sidebar (heart icon) first.');
+        }
+      }, 100);
       return;
     }
 
     isBuilding = true;
-
-    // Immediately open your webview panel so user can see it right away
-    panel = vscode.window.createWebviewPanel(
-      'tamagotchiView',
-      'Tamagotchi Live View',
-      vscode.ViewColumn.One,
-      { enableScripts: true }
-    );
-    panel.webview.html = getWebviewContent();
 
     // First build and run your oF app
     const ofAppPath = path.join(__dirname, '../ofxCodePlugin_CC2'); // adjust relative path
     const ofAppExecutable = path.join(ofAppPath, 'bin/ofxCodePlugin_CC2.app/Contents/MacOS/ofxCodePlugin_CC2');
 
     vscode.window.showInformationMessage('Building openFrameworks app...');
+    console.log('Building at path:', ofAppPath);
+    console.log('Executable path:', ofAppExecutable);
 
     // Send fake progress updates to webview
     let progress = 0;
     const progressInterval = setInterval(() => {
-      if (panel) {
-        panel.webview.postMessage({ type: 'progress', value: progress });
+      if (currentWebview) {
+        currentWebview.webview.postMessage({ type: 'progress', value: progress });
       }
       if (progress < 90) progress += 2; // increment until 90%
     }, 200);
@@ -67,8 +104,12 @@ function activate(context) {
     // Use spawn instead of exec so it doesn't block
     const buildProcess = cp.spawn('make', ['Release'], { cwd: ofAppPath });
 
-    buildProcess.stdout.on('data', data => console.log(data.toString()));
-    buildProcess.stderr.on('data', data => console.error(data.toString()));
+    buildProcess.stdout.on('data', data => {
+      console.log('BUILD OUTPUT:', data.toString());
+    });
+    buildProcess.stderr.on('data', data => {
+      console.error('BUILD ERROR:', data.toString());
+    });
 
     buildProcess.on('close', code => {
       clearInterval(progressInterval);
@@ -78,40 +119,47 @@ function activate(context) {
         return;
       }
       vscode.window.showInformationMessage('Build succeeded, launching app...');
+      console.log('Launching app:', ofAppExecutable);
       
       hasBuilt = true;
 
       // Set progress to 100% before starting app
-      if (panel) panel.webview.postMessage({ type: 'progress', value: 100 });
+      if (currentWebview) currentWebview.webview.postMessage({ type: 'progress', value: 100 });
 
       // Launch the oF app without blocking the extension
       const runProcess = cp.spawn(ofAppExecutable, [], { detached: true, stdio: 'ignore' });
       runProcess.unref(); // let it run independently
+      console.log('App launched, waiting 2 seconds before connecting...');
 
       // Connect to TCP servers once the app starts (with delay to let app initialize)
       setTimeout(() => {
-        connectToImageServer(panel);
+        console.log('Attempting to connect to TCP servers...');
+        connectToImageServer(currentWebview);
         connectToMessageServer();
       }, 2000); // Wait 2 seconds for the app to fully start
     });
   });
 
   // Function to connect to image server and stream frames
-  function connectToImageServer(panel) {
+  function connectToImageServer(webview) {
     // Opens a TCP connection to your C++ app's image server on localhost port 12000:
     const imageClient = new net.Socket();
     let retries = 0;
     const maxRetries = 20;
 
     function tryConnect() {
+      console.log('Trying to connect to image server on port 12000...');
       imageClient.connect(12000, '127.0.0.1', () => {
         console.log('Connected to image server');
+        vscode.window.showInformationMessage('Connected to Tamagotchi image server');
       });
     }
 
     imageClient.on('connect', () => {
+      console.log('Image client connected, listening for data...');
       let chunks = [];
       imageClient.on('data', (data) => {
+        console.log('Received image data chunk, size:', data.length);
         chunks.push(data);
         
         // Check if we have a complete PNG by looking for PNG end marker
@@ -125,7 +173,7 @@ function activate(context) {
           
           // Send complete frame to webview
           const base64 = completeFrame.toString('base64');
-          panel.webview.postMessage({ type: 'frame', data: base64 });
+          webview.webview.postMessage({ type: 'frame', data: base64 });
           
           // Keep any remaining data for next frame
           const remaining = combined.slice(endIndex);
@@ -191,6 +239,30 @@ function activate(context) {
     }
   });
 
+  // Add this event listener in your activate() function
+  vscode.workspace.onDidChangeTextDocument((event) => {
+    // Clear any existing timer
+    clearTimeout(typingTimer);
+    
+    // If not currently typing, send "start working" message
+    if (!isCurrentlyTyping) {
+      isCurrentlyTyping = true;
+      if (messageClient && messageClient.readyState === 'open') {
+        messageClient.write('status:working\n');
+        console.log('User started typing - sent working status');
+      }
+    }
+    
+    // Set new timer for when user goes idle (3 minutes)
+    typingTimer = setTimeout(() => {
+      isCurrentlyTyping = false;
+      if (messageClient && messageClient.readyState === 'open') {
+        messageClient.write('status:idle\n');
+        console.log('User went idle - sent idle status');
+      }
+    }, IDLE_TIMEOUT);
+  });
+
   // Ensures commands are properly cleaned up when the extension deactivates:
   context.subscriptions.push(showViewCmd, sendMessageCmd);
 }
@@ -219,26 +291,34 @@ function getWebviewContent() {
           image-rendering: pixelated;
           text-rendering: optimizeSpeed;
           letter-spacing: 1px;
-          font-size: 12px; /* Adjust size as needed */
+          font-size: 8px; /* Smaller for sidebar */
+          padding: 5px;
         }
         #loading {
           text-align: center;
+          padding: 5px;
         }
         #bar {
           height: 100%;
           width: 0%;
           background: white;
         }
+        #frame {
+          width: 100%;
+          height: auto;
+          max-width: 100%;
+          object-fit: contain;
+        }
       </style>
     </head>
     <body>
       <div id="loading">
         <div>Loading... <span id="percent">0</span>%</div>
-        <div style="width:300px; height:20px; border:1px solid white; margin-top:10px;">
+        <div style="width:150px; height:12px; border:1px solid white; margin-top:5px;">
           <div id="bar"></div>
         </div>
       </div>
-      <img id="frame" style="display:none; width:100%; height:auto; min-width:400px; min-height:300px; max-width:800px; object-fit:contain;">
+      <img id="frame" style="display:none;">
       <script>
         const vscode = acquireVsCodeApi();
         window.addEventListener('message', event => {
