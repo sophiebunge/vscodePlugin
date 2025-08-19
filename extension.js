@@ -24,7 +24,7 @@ function activate(context) {
 
   let typingTimer; // Status of user typing
   let isCurrentlyTyping = false; // Track if user is currently typing
-  const IDLE_TIMEOUT = 3 * 60 * 1000; // 3 minutes timeout
+  const IDLE_TIMEOUT = 3 * 60 * 10; // 3 minutes timeout
 
   // Create the webview view provider for the sidebar
   const provider = {
@@ -244,23 +244,24 @@ function activate(context) {
     // Clear any existing timer
     clearTimeout(typingTimer);
     
-    // If not currently typing, send "start working" message
-    if (!isCurrentlyTyping) {
-      isCurrentlyTyping = true;
-      if (messageClient && messageClient.readyState === 'open') {
-        messageClient.write('status:working\n');
-        console.log('User started typing - sent working status');
-      }
-    }
-    
-    // Set new timer for when user goes idle (3 minutes)
-    typingTimer = setTimeout(() => {
-      isCurrentlyTyping = false;
-      if (messageClient && messageClient.readyState === 'open') {
-        messageClient.write('status:idle\n');
-        console.log('User went idle - sent idle status');
-      }
-    }, IDLE_TIMEOUT);
+  // If the user is currently typing, we set a timer to mark them as idle after few minutes
+if (!isCurrentlyTyping) {
+  isCurrentlyTyping = true;
+  if (messageClient && messageClient.readyState === 'open') {
+    const msg = 'User started typing - sent working status';
+    messageClient.write(msg + '\n');  // actually send it over TCP
+    console.log(msg); // still log it in VS Code console
+  }
+}
+
+typingTimer = setTimeout(() => {
+  isCurrentlyTyping = false;
+  if (messageClient && messageClient.readyState === 'open') {
+    const msg = 'User went idle - sent idle status';
+    messageClient.write(msg + '\n');  // send over TCP
+    console.log(msg); // log locally
+  }
+}, IDLE_TIMEOUT);
   });
 
   // Ensures commands are properly cleaned up when the extension deactivates:
