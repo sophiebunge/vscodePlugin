@@ -268,7 +268,7 @@ typingTimer = setTimeout(() => {
   context.subscriptions.push(showViewCmd, sendMessageCmd);
 }
 
-// Basic HTML with loading screen and progress bar, replaced by live stream when ready:
+// Basic HTML content here (Loading bar, )
 function getWebviewContent() {
   return `
     <!DOCTYPE html>
