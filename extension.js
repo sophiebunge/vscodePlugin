@@ -52,6 +52,10 @@ function activate(context) {
                     console.log('Timer button clicked');
                     messageClient.write('timer\n');
                     break;
+                case 'stop timer':
+                    console.log('Stop Timer button clicked');
+                     messageClient.write('stop timer\n');
+                    break;
                 default:
                     console.log('Unknown message from webview:', message);
             }
@@ -376,9 +380,20 @@ function getWebviewContent() {
         document.getElementById('coffeeBtn').addEventListener('click', () => {
           vscode.postMessage({ type: 'coffee' });
         });
-        document.getElementById('timerBtn').addEventListener('click', () => {
-          vscode.postMessage({ type: 'timer' });
-        });
+     const timerBtn = document.getElementById('timerBtn');
+let timerRunning = false;
+
+timerBtn.addEventListener('click', () => {
+  if (timerRunning) {
+    vscode.postMessage({ type: 'stop timer' });
+    timerBtn.textContent = 'Start Timer';
+    timerRunning = false;
+  } else {
+    vscode.postMessage({ type: 'timer' });
+    timerBtn.textContent = 'Stop Timer';
+    timerRunning = true;
+  }
+});
     
       </script>
     </body>
