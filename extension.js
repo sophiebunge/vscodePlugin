@@ -35,6 +35,27 @@ function activate(context) {
       };
 
       webviewView.webview.html = getWebviewContent();
+
+        // Handle messages from the webview
+        webviewView.webview.onDidReceiveMessage(message => {
+            if (!messageClient) {
+                vscode.window.showErrorMessage('Message server not connected!');
+                return;
+            }
+
+            switch (message.type) {
+                case 'coffee':
+                    console.log('Coffee button clicked');
+                    messageClient.write('coffee\n');
+                    break;
+                case 'timer':
+                    console.log('Timer button clicked');
+                    messageClient.write('timer\n');
+                    break;
+                default:
+                    console.log('Unknown message from webview:', message);
+            }
+        });
       
       // Store reference to webview for later use
       provider._view = webviewView;
@@ -310,6 +331,16 @@ function getWebviewContent() {
           max-width: 100%;
           object-fit: contain;
         }
+          #buttons {
+          margin: 10px 0;
+        }
+        #buttons button {
+          font-family: 'Press Start 2P', monospace;
+          font-size: 8px;
+          margin: 0 5px;
+          padding: 5px 10px;
+          cursor: pointer;
+        }
       </style>
     </head>
     <body>
@@ -319,10 +350,15 @@ function getWebviewContent() {
           <div id="bar"></div>
         </div>
       </div>
+   
       <img id="frame" style="display:none;">
+      <div id="buttons" style="margin-top:10px; display:none;">
+        <button id="coffeeBtn">Coffee</button>
+        <button id="timerBtn">Timer</button>
+      </div>
       <script>
         const vscode = acquireVsCodeApi();
-        window.addEventListener('message', event => {
+            window.addEventListener('message', event => {
           if (event.data.type === 'progress') {
             document.getElementById('percent').textContent = event.data.value;
             document.getElementById('bar').style.width = event.data.value + '%';
@@ -331,8 +367,19 @@ function getWebviewContent() {
             document.getElementById('loading').style.display = 'none';
             document.getElementById('frame').style.display = 'block';
             document.getElementById('frame').src = 'data:image/png;base64,' + event.data.data;
-          }
+         
+        // Show buttons now
+        document.getElementById('buttons').style.display = 'block';
+            }
         });
+           // Button click handlers
+        document.getElementById('coffeeBtn').addEventListener('click', () => {
+          vscode.postMessage({ type: 'coffee' });
+        });
+        document.getElementById('timerBtn').addEventListener('click', () => {
+          vscode.postMessage({ type: 'timer' });
+        });
+    
       </script>
     </body>
     </html>
